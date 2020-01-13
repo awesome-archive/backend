@@ -9,7 +9,7 @@ import (
 var (
 	H_XAUTH        = "X-Auth"
 	P_PREVIEW_TYPE = "previewType"
-	P_ROOTHASH     = "rootHash"
+	P_EXSHARE      = "exshare"
 )
 var (
 	// Version is the current File Browser version.
@@ -56,7 +56,7 @@ var MIME_EXT = [][]string{{
 }, {
 	".3gp", ".3g2", ".asf", ".wma", ".wmv",
 	".avi", ".divx", ".f4v", ".evo", ".flv",
-	".MKV", ".MK3D", ".MKA", ".MKS", ".webm",
+	".mkv", ".mk3d", ".mka", ".mks", ".webm",
 	".mcf", ".mp4", ".mpg", ".mpeg", ".m2p",
 	".ps", ".ts", ".m2ts", ".mxf",
 	".mov", ".qt", ".rmvb", ".vob",

@@ -21,7 +21,7 @@ var (
 	resourceMediaFilter = func(c *fb.Context, name, p string) bool {
 
 		var fitType bool
-		ok, t := utils.GetBasedOnExtensions(filepath.Ext(name))
+		ok, t := utils.GetFileType(filepath.Ext(name))
 		hasType := c.Audio || c.Video || c.Pdf || c.Image
 		if ok && hasType {
 			fitType = t == cnst.IMAGE && c.Image ||
@@ -72,7 +72,7 @@ func resourceHandler(c *fb.Context) (int, error) {
 
 func resourceGetHandler(c *fb.Context) (int, error) {
 	// GetUsers the information of the directory/file.
-	f, err := fb.MakeInfo(c)
+	f, err := c.MakeInfo()
 	if err != nil {
 		return cnst.ErrorToHTTP(err, false), err
 	}
@@ -81,13 +81,13 @@ func resourceGetHandler(c *fb.Context) (int, error) {
 	if f.IsDir {
 		c.File = f
 		listingHandler(c)
-		return renderJSON(c.RESP, f)
+		return renderJSON(c, f)
 	}
 
 	// Tries to get the file type.
 
 	// If the file type is text, save its content.
-	f.SetFileType(true)
+	_, f.Type = utils.GetFileType(f.Name)
 
 	if f.Type == cnst.TEXT {
 		var content []byte
@@ -105,12 +105,12 @@ func resourceGetHandler(c *fb.Context) (int, error) {
 	// just serve the editor.
 	if !f.CanBeEdited() || !c.User.AllowEdit {
 		f.Kind = "preview"
-		return renderJSON(c.RESP, f)
+		return renderJSON(c, f)
 	}
 
 	f.Kind = "editor"
 
-	return renderJSON(c.RESP, f)
+	return renderJSON(c, f)
 }
 
 func listingHandler(c *fb.Context) (int, error) {
@@ -191,7 +191,7 @@ func removePreview(c *fb.Context) {
 } //rename preview
 func modPreview(c *fb.Context, src, dst string, isCopy bool) {
 	info, err := c.User.FileSystem.Stat(src)
-	_, t := utils.GetBasedOnExtensions(src)
+	_, t := utils.GetFileType(src)
 	if err != nil {
 		//log.Printf("resource: preview file locked or it does not exists %s", err)
 		return
@@ -274,10 +274,10 @@ func resourcePostPutHandler(c *fb.Context) (int, error) {
 		return cnst.ErrorToHTTP(err, false), err
 	}
 	if !fi.IsDir() {
-		inf, err := fb.MakeInfo(c)
+		inf, err := c.MakeInfo()
 		if err == nil {
 			c.File = inf
-			modP := utils.PreviewPathMod(c.URL, c.GetUserHomePath(), c.GetUserPreviewPath())
+			modP := utils.GenPreviewConvertPath(c.URL, c.GetUserHomePath(), c.GetUserPreviewPath())
 			if !utils.Exists(modP) {
 				c.GenPreview(modP)
 			}

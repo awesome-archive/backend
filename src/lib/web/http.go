@@ -32,11 +32,14 @@ func Handler(m *fb.FileBrowser) http.Handler {
 				log.Printf("%v: %v %v\n", r.URL.Path, code, txt)
 				log.Println(err)
 			} else {
+				log.Println(err)
 				err = nil
 			}
 		}
+		if !c.Rendered && c.Router > 0 && c.Router != cnst.R_DOWNLOAD && c.Router != cnst.R_PLAYLIST {
+			w.WriteHeader(code)
+		}
 
-		w.WriteHeader(code)
 	})
 }
 
@@ -45,14 +48,14 @@ func serve(c *fb.Context) (int, error) {
 	// Checks if this request is made to the static assets folder. If so, and
 	// if it is a GET request, returns with the asset. Otherwise, returns
 	// a status not implemented.
-	if matchURL(c.REQ.URL.Path, "/static") {
+	if strings.HasPrefix(c.REQ.URL.Path, "/static") {
 		if c.Method != http.MethodGet {
 			return http.StatusNotImplemented, nil
 		}
 
 		return staticHandler(c)
 	}
-	if matchURL(c.REQ.URL.Path, cnst.WEB_DAV_URL) {
+	if strings.HasPrefix(c.REQ.URL.Path, cnst.WEB_DAV_URL) {
 		ServeDav(c, c.RESP, c.REQ)
 		return http.StatusOK, nil
 
@@ -60,7 +63,7 @@ func serve(c *fb.Context) (int, error) {
 
 	// Checks if this request is made to the API and directs to the
 	// API handler if so.
-	if matchURL(c.REQ.URL.Path, "/api") {
+	if strings.HasPrefix(c.REQ.URL.Path, "/api") {
 		return apiHandler(c)
 	}
 
@@ -100,8 +103,7 @@ func apiHandler(c *fb.Context) (code int, err error) {
 	isShares := ProcessParams(c)
 	//allow only GET requests, for external share
 	if valid && c.User.IsGuest() && (!isShares ||
-		!strings.EqualFold(c.Method, http.MethodGet) ||
-		c.Router == cnst.R_RESOURCE ||
+		c.Method != http.MethodGet ||
 		c.Router == cnst.R_USERS ||
 		c.Router == cnst.R_SETTINGS) {
 		return http.StatusForbidden, nil
@@ -116,7 +118,7 @@ func apiHandler(c *fb.Context) (code int, err error) {
 		}
 		// do not waste bandwidth if we just want the checksum
 		c.File.Content = ""
-		return renderJSON(c.RESP, c.File)
+		return renderJSON(c, c.File)
 	}
 
 	switch c.Router {
@@ -146,7 +148,7 @@ func apiHandler(c *fb.Context) (code int, err error) {
 		c.Method == http.MethodPut ||
 		c.Method == http.MethodPost ||
 		c.Method == http.MethodDelete {
-		if c.Config != nil {
+		if c.Config != nil && err != nil {
 			c.Config.WriteConfig()
 		}
 
@@ -163,8 +165,7 @@ func renderFile(c *fb.Context, file string) (int, error) {
 	}
 	c.Query = c.REQ.URL.Query()
 
-	c.RootHash = c.Query.Get("rootHash")
-	isEx := len(c.RootHash) > 0
+	c.IsExternal = len(c.Query.Get(cnst.P_EXSHARE)) > 0
 	c.RESP.Header().Set("Content-Type", contentType+"; charset=utf-8")
 	cfgM := c.GetAuthConfig()
 
@@ -172,7 +173,7 @@ func renderFile(c *fb.Context, file string) (int, error) {
 		"Name":            "Browsefile",
 		"DisableExternal": false,
 		"Version":         cnst.Version,
-		"isExternal":      isEx,
+		"isExternal":      c.IsExternal,
 		"StaticURL":       "/static",
 		"Signup":          false,
 		"NoAuth":          strings.ToLower(cfgM.AuthMethod) == "noauth" || strings.ToLower(cfgM.AuthMethod) == "ip",
@@ -181,7 +182,7 @@ func renderFile(c *fb.Context, file string) (int, error) {
 		"ReCaptchaKey":    c.ReCaptcha.Key,
 	}
 
-	if isEx {
+	if c.IsExternal {
 		data["StaticURL"] = c.Config.ExternalShareHost + "/static"
 	}
 	b, err := json.MarshalIndent(data, "", "  ")
@@ -205,24 +206,16 @@ func renderFile(c *fb.Context, file string) (int, error) {
 }
 
 // renderJSON prints the JSON version of data to the browser.
-func renderJSON(w http.ResponseWriter, data interface{}) (int, error) {
+func renderJSON(c *fb.Context, data interface{}) (int, error) {
 	marsh, err := json.Marshal(data)
 	if err != nil {
 		return http.StatusInternalServerError, err
 	}
-
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	if _, err := w.Write(marsh); err != nil {
+	c.Rendered = true
+	c.RESP.Header().Set("Content-Type", "application/json; charset=utf-8")
+	if _, err := c.RESP.Write(marsh); err != nil {
 		return http.StatusInternalServerError, err
 	}
 
 	return 0, nil
-}
-
-// matchURL checks if the first URL matches the second.
-func matchURL(first, second string) bool {
-	first = strings.ToLower(first)
-	second = strings.ToLower(second)
-
-	return strings.HasPrefix(first, second)
 }

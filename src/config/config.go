@@ -88,7 +88,7 @@ func (cfg *GlobalConfig) GetExternal(hash string) (res *ShareItem, usr *UserConf
 	defer updateLock.RUnlock()
 	for _, user := range cfg.Users {
 		for _, item := range user.Shares {
-			if strings.EqualFold(hash, item.Hash) {
+			if hash == item.Hash {
 				res = item
 				usr = user
 				break
@@ -134,8 +134,6 @@ func (cfg *GlobalConfig) Verify() {
 			shr.Hash = GenShareHash(u.Username, shr.Path)
 		}
 	}
-
-	//todo
 }
 
 // ~/<<cfg_PATH>>/<<username>>/files
@@ -151,6 +149,11 @@ func (cfg *GlobalConfig) GetUserSharesPath(userName string) string {
 // ~/<<cfg_PATH>>/<<username>>/preview
 func (cfg *GlobalConfig) GetUserPreviewPath(userName string) string {
 	return filepath.Join(cfg.FilesPath, userName, "preview")
+}
+
+// ~/<<cfg_PATH>>/<<username>>/sharex
+func (cfg *GlobalConfig) GetUserSharexPath(userName string) string {
+	return filepath.Join(cfg.FilesPath, userName, "sharex")
 }
 
 //read and initiate global config, if file missed, one will be created with default settings.
@@ -223,6 +226,8 @@ func (cfg *GlobalConfig) setUpPaths() {
 	for _, u := range cfg.Users {
 		//create shares folder
 		createPath(cfg.GetUserSharesPath(u.Username))
+		//create external shares folder
+		createPath(cfg.GetUserSharexPath(u.Username))
 		//create user files folder
 		createPath(cfg.GetUserHomePath(u.Username))
 		//create user preview folder
@@ -232,7 +237,7 @@ func (cfg *GlobalConfig) setUpPaths() {
 		//fix bad symlinks, or build missed for share for specific user
 		for _, owner := range cfg.Users {
 			//skip same user
-			if strings.EqualFold(owner.Username, u.Username) {
+			if owner.Username == u.Username {
 				continue
 			}
 
@@ -242,6 +247,12 @@ func (cfg *GlobalConfig) setUpPaths() {
 
 					needUpdate = true
 				}
+			}
+		}
+		for _, shr := range u.Shares {
+			if !cfg.checkExternalShareSymLinkPath(shr, u.Username) {
+				u.DeleteShare(shr.Path)
+				needUpdate = true
 			}
 		}
 	}
@@ -350,6 +361,7 @@ func (cfg *GlobalConfig) setupLog() {
 		log.SetOutput(ioutil.Discard)
 	default:
 		log.SetOutput(&lumberjack.Logger{
+			LocalTime:  true,
 			Filename:   cfg.Log,
 			MaxSize:    100,
 			MaxAge:     14,

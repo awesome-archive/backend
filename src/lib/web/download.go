@@ -22,7 +22,7 @@ func downloadHandler(c *fb.Context) (code int, err error) {
 		if len(c.URL) == 0 {
 			return http.StatusBadRequest, cnst.ErrInvalidOption
 		}
-		c.File, err = fb.MakeInfo(c)
+		c.File, err = c.MakeInfo()
 		if err != nil {
 			return cnst.ErrorToHTTP(err, false), err
 		}
@@ -56,10 +56,16 @@ func prepareFiles(c *fb.Context) (int, error, []os.FileInfo) {
 	var err error
 	// If there are files in the query, sanitize their names.
 	// Otherwise, just append the current path.
+	//todo: allow share to self
+	extUsr, _ := c.Config.GetUserByUsername(cnst.GUEST)
+	extUsrMod := fb.ToUserModel(extUsr, c.Config)
 	for _, p := range c.FilePaths {
-		p := utils.SlashClean(p)
+		p = utils.SlashClean(p)
 		c.URL = p
-		c.File, err = fb.MakeInfo(c)
+		if c.IsExternal {
+			c.User = extUsrMod
+		}
+		c.File, err = c.MakeInfo()
 		if err != nil {
 			return cnst.ErrorToHTTP(err, false), err, nil
 		}
@@ -112,19 +118,19 @@ func downloadFileHandler(c *fb.Context) (int, error) {
 	//serve icon
 	if len(c.PreviewType) > 0 {
 		var prevPath string
-		_, prevPath, c.URL, err = fb.ResolveContextUser(c)
-		if c.IsExternalShare() {
+		_, prevPath, err = c.ResolveContextUser()
+		if c.IsExternal {
 			prevPath = filepath.Join(prevPath, c.URL)
 		}
 
 		if c.IsShare {
 			prevPath, _ = utils.ReplacePrevExt(prevPath)
 		} else {
-			prevPath = utils.PreviewPathMod(c.File.Path, c.GetUserHomePath(), c.GetUserPreviewPath())
+			prevPath = utils.GenPreviewConvertPath(c.File.Path, c.GetUserHomePath(), c.GetUserPreviewPath())
 		}
 
 		if !utils.Exists(prevPath) {
-			if c.IsShare && !c.IsExternalShare() {
+			if c.IsShare {
 				c.GenSharesPreview(prevPath)
 			} else {
 				c.GenPreview(prevPath)
@@ -135,7 +141,7 @@ func downloadFileHandler(c *fb.Context) (int, error) {
 			return servePreview(c, prevPath)
 		}
 	}
-	c.File.SetFileType(false)
+	_, c.File.Type = utils.GetFileType(c.File.Name)
 	m := utils.GetMimeType(c.File.Path)
 	if len(m) == 0 {
 		m = c.File.Type

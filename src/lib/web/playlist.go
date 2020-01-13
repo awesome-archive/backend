@@ -22,7 +22,7 @@ func makePlaylist(c *lib.Context) (int, error) {
 	}
 	c.RESP.Header().Set("Content-Disposition", "attachment; filename=playlist.m3u")
 	c.FitFilter = func(name, p string) bool {
-		if ok, t := utils.GetBasedOnExtensions(filepath.Ext(name)); ok && fitMediaFilter(c, t) {
+		if ok, t := utils.GetFileType(filepath.Ext(name)); ok && fitMediaFilter(c, t) {
 			return true
 		}
 		return false
@@ -41,25 +41,28 @@ func makePlaylist(c *lib.Context) (int, error) {
 }
 
 func fitMediaFilter(c *lib.Context, t string) bool {
-	return c.Audio && strings.EqualFold(t, cnst.AUDIO) ||
-		c.Video && strings.EqualFold(t, cnst.VIDEO) ||
-		c.Image && strings.EqualFold(t, cnst.IMAGE)
+	return c.Audio && t == cnst.AUDIO ||
+		c.Video && t == cnst.VIDEO ||
+		c.Image && t == cnst.IMAGE
 }
 
 //write specific m3u tags into response
 func serveFileAsUrl(c *lib.Context, fName, p, host string) {
 
-	io.WriteString(c.RESP, "#EXTINF:0 tvg-name=")
+	io.WriteString(c.RESP, "#EXTINF:0 group-title=\"")
+	io.WriteString(c.RESP, "Browsefile")
+	io.WriteString(c.RESP, "\",")
 	io.WriteString(c.RESP, fName)
+
 	io.WriteString(c.RESP, "\r\n")
 	io.WriteString(c.RESP, host)
 	io.WriteString(c.RESP, p)
 	io.WriteString(c.RESP, "?inline=true")
 
-	if c.IsExternalShare() {
+	if c.IsExternal {
 		io.WriteString(c.RESP, "&")
-		io.WriteString(c.RESP, cnst.P_ROOTHASH)
-		io.WriteString(c.RESP, "="+c.RootHash)
+		io.WriteString(c.RESP, cnst.P_EXSHARE)
+		io.WriteString(c.RESP, "=1")
 	}
 	if len(c.Auth) > 0 {
 		io.WriteString(c.RESP, "&auth="+c.Auth)
@@ -72,7 +75,7 @@ func serveFileAsUrl(c *lib.Context, fName, p, host string) {
 //returns correct URL for playlist link in file
 func getHost(c *lib.Context) string {
 	var h string
-	if c.IsExternalShare() {
+	if c.IsExternal {
 		h = strings.TrimSuffix(c.Config.ExternalShareHost, "/")
 	} else {
 		if c.REQ.TLS == nil {
@@ -87,7 +90,7 @@ func getHost(c *lib.Context) string {
 	} else {
 		h += "/api/download"
 	}
-	if !c.IsExternalShare() {
+	if !c.IsExternal {
 		if c.REQ.TLS != nil {
 			h = "https://" + h
 		} else {

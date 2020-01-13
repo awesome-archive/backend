@@ -5,6 +5,7 @@ import (
 	fb "github.com/browsefile/backend/src/lib"
 	"github.com/browsefile/backend/src/lib/utils"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 )
@@ -20,7 +21,7 @@ func ProcessParams(c *fb.Context) (isShares bool) {
 	c.Order = c.Query.Get("order")
 	c.PreviewType = c.Query.Get(cnst.P_PREVIEW_TYPE)
 	c.Inline, _ = strconv.ParseBool(c.Query.Get("inline"))
-	c.RootHash = c.Query.Get(cnst.P_ROOTHASH)
+	c.IsExternal = len(c.Query.Get(cnst.P_EXSHARE)) > 0
 	c.Checksum = c.Query.Get("checksum")
 	c.ShareType = c.Query.Get("share")
 	c.IsRecursive, _ = strconv.ParseBool(c.Query.Get("recursive"))
@@ -51,7 +52,7 @@ func ProcessParams(c *fb.Context) (isShares bool) {
 		if len(arr) > 1 {
 			setFileType(c, arr[1])
 		}
-		if (c.Image || c.Audio || c.Video) && strings.EqualFold(arr[0], "m3u") {
+		if (c.Image || c.Audio || c.Video) && arr[0] == "m3u" {
 			c.Algo = arr[0]
 			c.Router = cnst.R_PLAYLIST
 		}
@@ -63,6 +64,10 @@ func ProcessParams(c *fb.Context) (isShares bool) {
 		f := c.Query.Get("files")
 		if len(f) > 0 {
 			c.FilePaths = strings.Split(f, ",")
+			for i, file := range c.FilePaths {
+				c.FilePaths [i], _ = url.PathUnescape(file)
+
+			}
 		}
 	} else if c.REQ.Method == http.MethodPatch {
 		c.Destination = c.REQ.Header.Get("Destination")

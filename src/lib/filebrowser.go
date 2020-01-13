@@ -46,12 +46,12 @@ type FileSystem interface {
 
 type UserModel struct {
 	*config.UserConfig
-	ID string `json:"ID"`
 	// FileSystem is the virtual file system the user has access.
 	FileSystem FileSystem `json:"-"`
 	// FileSystem is the virtual file system the user has access, uses to store previews.
 	FileSystemPreview FileSystem `json:"-"`
 	FileSystemShares  FileSystem `json:"-"`
+	FileSystemSharex  FileSystem `json:"-"`
 }
 
 // FSBuilder is the File System Builder.
@@ -115,10 +115,11 @@ func (fb *FileBrowser) Setup() (bool, error) {
 }
 
 func ToUserModel(u *config.UserConfig, cfg *config.GlobalConfig) *UserModel {
-	return &UserModel{u, u.Username,
+	return &UserModel{u,
 		utils.Dir(cfg.GetUserHomePath(u.Username)),
 		utils.Dir(cfg.GetUserPreviewPath(u.Username)),
 		utils.Dir(cfg.GetUserSharesPath(u.Username)),
+		utils.Dir(cfg.GetUserSharexPath(u.Username)),
 	}
 }
 
